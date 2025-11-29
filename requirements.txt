@@ -1,0 +1,24 @@
+# Core
+pyzstd>=0.15.0          # ZSTD compression for game files
+pyyaml>=6.0             # Configuration files
+pydantic>=2.0           # Configuration validation
+pydantic-settings>=2.0  # Environment settings
+python-dotenv>=1.0      # .env file loading
+
+# CLI and UI
+click>=8.0              # Command line interface
+rich>=13.0              # Beautiful console output
+
+# LangChain and LLM providers
+langchain>=0.3.0        # LangChain framework
+langchain-core>=0.3.0   # LangChain core
+langchain-openai>=0.2.0 # OpenAI integration
+
+# Optional LLM providers (uncomment as needed)
+# langchain-anthropic>=0.2.0  # Anthropic Claude
+# langchain-google-genai>=2.0 # Google Gemini
+
+# Utilities
+tenacity>=8.0           # Retry logic
+aiohttp>=3.9            # Async HTTP
+tiktoken>=0.5.0         # Token counting for cost estimation

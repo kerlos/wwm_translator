@@ -1,0 +1,63 @@
+# WWM Translator Configuration
+# =============================
+
+# File paths
+paths:
+  # Game localization files directory
+  game_locale_dir: "Y:/SteamLibrary/steamapps/common/Where Winds Meet/Package/HD/oversea/locale"
+  
+  # Working directories
+  work_dir: "./data"
+  source_dir: "./data/source"
+  translated_dir: "./data/translated"
+  progress_dir: "./data/progress"
+  rules_dir: "./rules"
+
+# Language settings
+languages:
+  original: "zh_cn"    # Original language (Chinese) - for context
+  source: "en"         # Source language for translation (English)
+  target: "ru"         # Target language (Russian)
+  context_languages: []  # Additional context languages
+
+# LLM provider settings
+llm:
+  provider: "openrouter"              # openrouter, openai, anthropic, google
+  model: "x-ai/grok-4-fast"    # Model via OpenRouter
+  temperature: 0.3                     # Lower = more deterministic
+  max_tokens: 4096                     # Max tokens per response
+  timeout: 120                         # Request timeout (seconds)
+  max_retries: 3                       # Retry attempts
+  retry_delay: 5                       # Delay between retries (seconds)
+
+# Batch processing settings
+batch:
+  size: 10                      # Texts per batch (smaller for free tier)
+  context_before: 4             # Context lines before batch
+  context_after: 4              # Context lines after batch  
+  max_tokens_per_batch: 4000    # Token limit per batch
+  concurrent_requests: 5        # Parallel requests (2 for free tier with rate limiting)
+  delay_between_batches: 0.3    # Delay between batch windows (seconds)
+
+# Progress tracking
+progress:
+  save_every_n_batches: 5       # Save progress every N batches
+  create_backups: true          # Create backup files
+  max_backups: 3                # Maximum backup count
+
+# Text filtering
+filtering:
+  skip_empty: true              # Skip empty strings
+  skip_tags_only: true          # Skip strings with only tags
+  min_length: 2                 # Minimum text length
+  skip_patterns:                # Regex patterns to skip
+    - "^\\{.*\\}$"              # Only variables
+    - "^\\d+$"                  # Only numbers
+    - "^[\\s\\p{P}]+$"          # Only punctuation
+
+# Logging settings
+logging:
+  level: "INFO"                 # DEBUG, INFO, WARNING, ERROR
+  file: "./logs/translator.log"
+  console: true
+  time_format: "%Y-%m-%d %H:%M:%S"

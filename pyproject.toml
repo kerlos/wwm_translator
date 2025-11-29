@@ -1,0 +1,171 @@
+[project]
+name = "wwm-translator"
+version = "1.0.0"
+description = "Neural translation tool for Where Winds Meet game"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "0niel" }]
+keywords = ["translation", "game", "localization", "llm", "langchain", "where-winds-meet"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment",
+    "Topic :: Text Processing :: Linguistic",
+]
+
+dependencies = [
+    "pyzstd>=0.15.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+    "click>=8.0",
+    "rich>=13.0",
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "tenacity>=8.0",
+    "aiohttp>=3.9",
+    "tiktoken>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
+]
+anthropic = ["langchain-anthropic>=0.2.0"]
+google = ["langchain-google-genai>=2.0"]
+
+[project.scripts]
+wwm-translate = "main:cli"
+
+[project.urls]
+Homepage = "https://github.com/0niel/wwm_translator"
+Repository = "https://github.com/0niel/wwm_translator"
+Issues = "https://github.com/0niel/wwm_translator/issues"
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+indent-width = 4
+
+# Exclude common directories
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+# Enable rules
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate (commented code)
+    "PL",     # Pylint
+    "PERF",   # Perflint
+    "RUF",    # Ruff-specific
+]
+
+# Ignore specific rules
+ignore = [
+    "E501",    # Line too long (handled by formatter)
+    "PLR0913", # Too many arguments
+    "PLR2004", # Magic value comparison
+    "PLR0912", # Too many branches
+    "PLR0915", # Too many statements  
+    "B008",    # Function call in default argument (click)
+    "B019",    # lru_cache on methods
+    "B905",    # zip without strict (Python 3.10+ only)
+    "PLC0415", # Import not at top level (lazy imports are intentional)
+    "TC002",   # Move import to TYPE_CHECKING (breaks runtime)
+    "TC003",   # Move import to TYPE_CHECKING
+    "TC004",   # Move import out of TYPE_CHECKING
+    "RUF012",  # Mutable class attributes
+    "RUF059",  # Unused unpacked variable
+    "PLW0603", # Global statement
+    "PTH123",  # open() vs Path.open() (both work fine)
+    "SIM102",  # Nested if (sometimes clearer)
+    "SIM115",  # Context manager for open
+    "ARG001",  # Unused function argument (signal handlers need them)
+    "PERF401", # list.extend vs append loop
+]
+
+# Allow autofix for all rules
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Unused imports OK in __init__
+"test_*.py" = ["ARG001"]  # Unused args OK in tests
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+force-single-line = false
+lines-after-imports = 2
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = ["venv/", ".venv/"]
+
+[[tool.mypy.overrides]]
+module = "pyzstd.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tiktoken.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
