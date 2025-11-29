@@ -3,18 +3,15 @@ from __future__ import annotations
 import csv
 import logging
 import struct
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, Self
+from typing import Protocol, Self
 
 import pyzstd
 
 from .models import ExtractionResult, TextEntry
 
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +27,13 @@ class Extractor(Protocol):
         ...
 
 
+ARCHIVE_MAGIC = b"\xef\xbe\xad\xde"
+TEXT_MAGIC = b"\xdc\x96\x58\x59"
+
+
 @dataclass(slots=True, frozen=True)
 class ArchiveHeader:
     """Archive file header."""
-
-    MAGIC: bytes = b"\xef\xbe\xad\xde"
-    TEXT_MAGIC: bytes = b"\xdc\x96\x58\x59"
 
     version: int = 1
     offset_count: int = 0
@@ -45,7 +43,7 @@ class ArchiveHeader:
         """Read header from bytes."""
         if len(data) < 12:
             return None
-        if data[:4] != cls.MAGIC:
+        if data[:4] != ARCHIVE_MAGIC:
             return None
 
         version = struct.unpack("<I", data[4:8])[0]
@@ -194,7 +192,7 @@ class BinaryExtractor:
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
             with open(output_file, "wb") as outfile:
-                outfile.write(ArchiveHeader.MAGIC)
+                outfile.write(ARCHIVE_MAGIC)
                 outfile.write(b"\x01\x00\x00\x00")
                 outfile.write(struct.pack("<I", len(dat_files)))
 
@@ -278,7 +276,7 @@ class TextExtractor:
             with open(dat_file, "rb") as f:
                 # Check magic at offset 16
                 f.seek(16)
-                if f.read(4) != ArchiveHeader.TEXT_MAGIC:
+                if f.read(4) != TEXT_MAGIC:
                     return
 
                 f.seek(0)
@@ -357,7 +355,7 @@ class TextExtractor:
 
         all_blocks_bytes = struct.pack("<II", all_blocks, 0)
         work_blocks_bytes = struct.pack("<II", work_blocks, 0)
-        file_bytes = ArchiveHeader.TEXT_MAGIC + b"\x00\x00\x00\x00"
+        file_bytes = TEXT_MAGIC + b"\x00\x00\x00\x00"
 
         unknown_bytes = b""
         id_bytes = b""

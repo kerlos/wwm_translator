@@ -304,11 +304,77 @@ def status(ctx: click.Context) -> None:
 
 
 @cli.command()
+@click.option("--output", "-o", help="Output CSV path")
+@click.pass_context
+def build(ctx: click.Context, output: str | None) -> None:
+    """Build game-ready CSV from translations"""
+    import csv
+
+    print_banner()
+    config: AppConfig = ctx.obj["config"]
+
+    source_csv = config.get_source_csv()
+    translated_csv = config.get_output_csv()
+    output_path = Path(output) if output else config.paths.translated_dir / "game_ready.csv"
+
+    if not source_csv.exists():
+        print_error(f"Source CSV not found: {source_csv}")
+        return
+
+    if not translated_csv.exists():
+        print_error(f"Translations not found: {translated_csv}")
+        return
+
+    console.print(f"[bold]Building game-ready CSV...[/bold]")
+    console.print(f"  Source: {source_csv.name}")
+    console.print(f"  Translations: {translated_csv.name}")
+    console.print()
+
+    translations: dict[str, str] = {}
+    with open(translated_csv, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        for row in reader:
+            if row.get("Status") == "translated" and row.get("Russian"):
+                translations[row["ID"]] = row["Russian"]
+
+    console.print(f"Loaded {len(translations):,} translations")
+
+    rows_written = 0
+    rows_translated = 0
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(source_csv, encoding="utf-8", newline="") as infile:
+        with open(output_path, "w", encoding="utf-8", newline="") as outfile:
+            reader = csv.reader(infile, delimiter=";")
+            writer = csv.writer(outfile, delimiter=";")
+
+            header = next(reader)
+            writer.writerow(header)
+
+            id_idx = header.index("ID")
+            text_idx = header.index("OriginalText")
+
+            for row in reader:
+                if len(row) > max(id_idx, text_idx):
+                    entry_id = row[id_idx]
+                    if entry_id in translations:
+                        row[text_idx] = translations[entry_id]
+                        rows_translated += 1
+                    writer.writerow(row)
+                    rows_written += 1
+
+    console.print()
+    print_success(f"Written: {rows_written:,} rows ({rows_translated:,} translated)")
+    print_success(f"Output: {output_path}")
+
+
+@cli.command()
 @click.argument("input_csv", type=click.Path(exists=True))
 @click.argument("output_dir", type=click.Path())
 @click.pass_context
 def pack(ctx: click.Context, input_csv: str, output_dir: str) -> None:
-    """Pack translated CSV back to game format"""
+    """Pack CSV to game .dat files"""
     print_banner()
 
     input_path = Path(input_csv)
@@ -321,6 +387,35 @@ def pack(ctx: click.Context, input_csv: str, output_dir: str) -> None:
 
     if result.success:
         print_success(f"Packed {result.files_extracted} .dat files")
+    else:
+        print_error(result.message)
+
+
+@cli.command()
+@click.argument("input_dir", type=click.Path(exists=True))
+@click.option("--output", "-o", help="Output file name")
+@click.pass_context
+def archive(ctx: click.Context, input_dir: str, output: str | None) -> None:
+    """Create game archive from .dat files"""
+    from src.extractor import BinaryExtractor
+
+    print_banner()
+    config: AppConfig = ctx.obj["config"]
+
+    input_path = Path(input_dir)
+    output_file = Path(output) if output else config.paths.translated_dir / f"translate_words_map_{config.languages.target}"
+
+    console.print(f"[bold]Creating archive...[/bold]")
+    console.print(f"  Input: {input_path}")
+    console.print(f"  Output: {output_file}")
+    console.print()
+
+    extractor = BinaryExtractor(log_callback=lambda msg: console.print(f"  {msg}"))
+    result = extractor.pack(input_path, output_file)
+
+    if result.success:
+        size = format_size(output_file.stat().st_size)
+        print_success(f"Archive created: {output_file.name} ({size})")
     else:
         print_error(result.message)
 
