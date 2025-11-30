@@ -9,77 +9,30 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-Compatible-6366F1?style=for-the-badge)](https://openrouter.ai)
 
-[English](#-english) • [Русский](#-русский)
+[English](#english) • [Русский](#русский)
 
-<img src="https://img.shields.io/badge/Where_Winds_Meet-逆水寒-CD7F32?style=for-the-badge" alt="Where Winds Meet"/>
+<img src="https://img.shields.io/badge/Where_Winds_Meet-Game_Localization-CD7F32?style=for-the-badge" alt="Where Winds Meet"/>
 
 </div>
 
 ---
 
-# 🇬🇧 English
+# English
 
 ## 📖 About
 
-**WWM Translator** is a professional-grade neural machine translation tool specifically designed for localizing the game **"Where Winds Meet"** (逆水寒). Powered by modern LLMs through LangChain, it provides high-quality translations while preserving the poetic essence and cultural nuances of the original Chinese text.
-
-The tool extracts texts from the game's proprietary HashMap-based binary localization files, translates them using advanced AI models (supporting OpenRouter, OpenAI, Anthropic, and Google), and patches them back into the game — all while maintaining full structural integrity.
+**WWM Translator** is a neural machine translation tool for localizing **"Where Winds Meet"**. It extracts texts from game files, translates them using AI models (OpenRouter, OpenAI, Anthropic, Google), and patches them back into the game.
 
 ## ✨ Features
 
-<table>
-<tr>
-<td width="50%">
-
-### 🚀 Performance
-- **Async batch processing** with configurable parallelism
-- **Smart resume system** — never lose progress
-- **Token-aware batching** for optimal LLM usage
-- **Rate limiting** with exponential backoff
-
-</td>
-<td width="50%">
-
-### 🎯 Quality
-- **Context-aware translation** with surrounding lines
-- **Multi-language context** (English + Chinese reference)
-- **Special character validation** ensures formatting integrity
-- **Length optimization** — avoids overly long translations
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🔧 Technical
-- **HashMap format support** — exact game format preservation
-- **ZSTD compression** for game archives
-- **Graceful shutdown** — Ctrl+C saves progress
-- **Detailed logging** with Rich console output
-
-</td>
-<td width="50%">
-
-### 📊 Analytics
-- **Real-time ETA** calculation
-- **Token counting** with cost estimation
-- **Progress tracking** with visual progress bars
-- **Verbose mode** for debugging
-
-</td>
-</tr>
-</table>
+- **Batch translation** with async processing and smart resume
+- **Context-aware** — uses surrounding lines + Chinese reference for better quality
+- **Special character validation** — ensures formatting stays intact
+- **Multiple LLM providers** — OpenRouter, OpenAI, Anthropic, Google
 
 ## 🛠 Installation
 
-### Prerequisites
-- Python 3.11 or higher
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-
-### Quick Start
-
 ```bash
-# Clone the repository
 git clone https://github.com/0niel/wwm_translator.git
 cd wwm_translator
 
@@ -92,22 +45,18 @@ pip install -e .
 
 ### Configuration
 
-1. **Create `.env` file** with your API credentials:
+1. **Create `.env` file:**
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 LLM_MODEL=deepseek/deepseek-chat-v3-0324
-
-# Optional: Cost tracking
-INPUT_PRICE_PER_MILLION=0.14
-OUTPUT_PRICE_PER_MILLION=0.28
 ```
 
-2. **Update `config.yaml`** with your game path:
+2. **Update `config.yaml`:**
 
 ```yaml
 paths:
-  game_locale_dir: "Y:/SteamLibrary/steamapps/common/Where Winds Meet/Package/HD/oversea/locale"
+  game_locale_dir: "path/to/Where Winds Meet/Package/HD/oversea/locale"
 
 languages:
   source: "en"      # Translate from English
@@ -117,177 +66,57 @@ languages:
 
 ## 📋 Usage
 
-### Complete Workflow
-
 ```bash
-# 1. Extract texts from game files
-python main.py extract en      # English texts
-python main.py extract zh_cn   # Chinese texts (for context)
+# 1. Extract texts
+python main.py extract en
+python main.py extract zh_cn
 
-# 2. Run translation
-python main.py translate       # Start translation
-python main.py translate -V    # Verbose mode (see batches)
+# 2. Translate
+python main.py translate
 
 # 3. Check progress
-python main.py status          # View translation status
+python main.py status
 
-# 4. Validate translations
-python main.py validate        # Check special characters
-python main.py validate --fix  # Mark issues for re-translation
-
-# 5. Patch game files
-python main.py autopatch              # Create patched files
-python main.py autopatch --install    # Install to game folder
+# 4. Validate & patch
+python main.py validate
+python main.py autopatch --install
 ```
 
-### Available Commands
+### Commands
 
 | Command | Description |
 |---------|-------------|
-| `extract <lang>` | Extract texts from game locale files |
-| `translate` | Start/resume translation process |
-| `status` | Show translation progress and statistics |
-| `validate` | Validate special characters in translations |
-| `autopatch` | Create and optionally install patched files |
-| `reset` | Reset all translation progress |
-| `info` | Show locale files information |
+| `extract <lang>` | Extract texts from game files |
+| `translate` | Start/resume translation |
+| `status` | Show progress |
+| `validate` | Check special characters |
+| `autopatch` | Create and install patch |
+| `reset` | Reset progress |
 
-### Command Options
+## 🎮 About the Game
 
-```bash
-# Translation with options
-python main.py translate --verbose        # Show batch details
-python main.py translate --batch-size 20  # Custom batch size
+**Where Winds Meet** is an epic open-world action-adventure RPG rooted in the rich legacy of Wuxia. Set during the turbulent era of tenth-century China, you take on the role of a young sword master, uncovering forgotten truths and the mysteries of your own identity.
 
-# Autopatch with options
-python main.py autopatch --install        # Install to game
-python main.py autopatch --with-diff      # Include diff files
-```
-
-## 📁 Project Structure
-
-```
-wwm_translator/
-├── main.py                 # CLI entry point
-├── config.yaml             # Main configuration
-├── .env                    # API keys and secrets
-├── pyproject.toml          # Project metadata & dependencies
-│
-├── src/                    # Source code
-│   ├── config.py           # Configuration loading
-│   ├── extractor.py        # Game file extraction
-│   ├── hashmap_format.py   # HashMap binary format handling
-│   ├── batch_processor.py  # Async batch translation
-│   ├── llm_client.py       # LangChain LLM integration
-│   ├── tokenizer.py        # Token counting & cost estimation
-│   ├── models.py           # Data models
-│   └── utils.py            # Utilities & logging
-│
-├── rules/                  # Translation rules
-│   └── game_context.txt    # Game description for LLM context
-│
-├── data/                   # Working data (gitignored)
-│   ├── source/             # Extracted source files
-│   ├── translated/         # Translation results
-│   └── progress/           # Progress checkpoints
-│
-└── logs/                   # Log files
-```
-
-## ⚙️ Configuration Reference
-
-### LLM Settings
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `provider` | `openrouter` | LLM provider (openrouter/openai/anthropic/google) |
-| `model` | `deepseek/deepseek-chat-v3-0324` | Model identifier |
-| `temperature` | `0.3` | Response randomness (0-1) |
-| `max_tokens` | `4096` | Max tokens per response |
-
-### Batch Settings
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `size` | `10` | Texts per batch |
-| `concurrent_requests` | `15` | Parallel API calls |
-| `max_tokens_per_batch` | `4000` | Token limit per batch |
-| `delay_between_batches` | `0.3` | Rate limiting delay |
-
-## 🎮 Supported Models
-
-| Provider | Models | Notes |
-|----------|--------|-------|
-| **OpenRouter** | DeepSeek, Grok, Claude, GPT-4, etc. | Recommended for variety |
-| **OpenAI** | GPT-4o, GPT-4-turbo | Direct API access |
-| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Opus | Excellent for nuanced text |
-| **Google** | Gemini Pro, Gemini Ultra | Good balance |
+Explore a vibrant world filled with life—from bustling cities to hidden temples. Experience Wuxia-style traversal, master combat with classic weapons (swords, spears, fans, umbrellas), and embark on adventures alone or with up to four friends.
 
 ---
 
-# 🇷🇺 Русский
+# Русский
 
 ## 📖 О проекте
 
-**WWM Translator** — профессиональный инструмент нейронного машинного перевода, специально разработанный для локализации игры **«Where Winds Meet»** (逆水寒, «Против течения»). Используя современные LLM через LangChain, инструмент обеспечивает высококачественный перевод, сохраняя поэтическую суть и культурные нюансы оригинального китайского текста.
-
-Инструмент извлекает тексты из проприетарных бинарных файлов локализации игры (формат HashMap), переводит их с помощью продвинутых ИИ-моделей (OpenRouter, OpenAI, Anthropic, Google) и внедряет обратно в игру — сохраняя полную структурную целостность.
+**WWM Translator** — инструмент нейроперевода для локализации **«Where Winds Meet»**. Извлекает тексты из файлов игры, переводит с помощью ИИ-моделей (OpenRouter, OpenAI, Anthropic, Google) и внедряет обратно в игру.
 
 ## ✨ Возможности
 
-<table>
-<tr>
-<td width="50%">
-
-### 🚀 Производительность
-- **Асинхронная пакетная обработка** с настраиваемым параллелизмом
-- **Умная система возобновления** — прогресс никогда не теряется
-- **Учёт токенов** для оптимального использования LLM
-- **Ограничение запросов** с экспоненциальной задержкой
-
-</td>
-<td width="50%">
-
-### 🎯 Качество
-- **Контекстно-зависимый перевод** с окружающими строками
-- **Мультиязычный контекст** (английский + китайский)
-- **Валидация спецсимволов** для сохранения форматирования
-- **Оптимизация длины** — избегание слишком длинных переводов
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🔧 Технические
-- **Поддержка HashMap формата** — точное сохранение формата игры
-- **ZSTD сжатие** для архивов игры
-- **Корректное завершение** — Ctrl+C сохраняет прогресс
-- **Подробное логирование** с Rich-выводом в консоль
-
-</td>
-<td width="50%">
-
-### 📊 Аналитика
-- **Расчёт ETA** в реальном времени
-- **Подсчёт токенов** с оценкой стоимости
-- **Отслеживание прогресса** с визуальными индикаторами
-- **Verbose-режим** для отладки
-
-</td>
-</tr>
-</table>
+- **Пакетный перевод** с асинхронной обработкой и возобновлением
+- **Учёт контекста** — использует окружающие строки + китайский для качества
+- **Валидация спецсимволов** — сохраняет форматирование
+- **Разные LLM-провайдеры** — OpenRouter, OpenAI, Anthropic, Google
 
 ## 🛠 Установка
 
-### Требования
-- Python 3.11 или выше
-- [uv](https://github.com/astral-sh/uv) (рекомендуется) или pip
-
-### Быстрый старт
-
 ```bash
-# Клонировать репозиторий
 git clone https://github.com/0niel/wwm_translator.git
 cd wwm_translator
 
@@ -300,106 +129,68 @@ pip install -e .
 
 ### Настройка
 
-1. **Создайте файл `.env`** с вашими API-ключами:
+1. **Создайте `.env`:**
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-ваш-ключ
 LLM_MODEL=deepseek/deepseek-chat-v3-0324
-
-# Опционально: отслеживание стоимости
-INPUT_PRICE_PER_MILLION=0.14
-OUTPUT_PRICE_PER_MILLION=0.28
 ```
 
-2. **Обновите `config.yaml`** с путём к игре:
+2. **Обновите `config.yaml`:**
 
 ```yaml
 paths:
-  game_locale_dir: "Y:/SteamLibrary/steamapps/common/Where Winds Meet/Package/HD/oversea/locale"
+  game_locale_dir: "путь/к/Where Winds Meet/Package/HD/oversea/locale"
 
 languages:
   source: "en"      # Переводим с английского
   target: "ru"      # На русский
-  patch_lang: "de"  # Заменяем немецкую локаль в игре
+  patch_lang: "de"  # Заменяем немецкую локаль
 ```
 
 ## 📋 Использование
 
-### Полный рабочий процесс
-
 ```bash
-# 1. Извлечь тексты из файлов игры
-python main.py extract en      # Английские тексты
-python main.py extract zh_cn   # Китайские тексты (для контекста)
+# 1. Извлечь тексты
+python main.py extract en
+python main.py extract zh_cn
 
-# 2. Запустить перевод
-python main.py translate       # Начать перевод
-python main.py translate -V    # Verbose-режим (показывать батчи)
+# 2. Перевести
+python main.py translate
 
 # 3. Проверить прогресс
-python main.py status          # Показать статус перевода
+python main.py status
 
-# 4. Валидировать переводы
-python main.py validate        # Проверить спецсимволы
-python main.py validate --fix  # Отметить проблемные для перевода
-
-# 5. Патчить файлы игры
-python main.py autopatch              # Создать запатченные файлы
-python main.py autopatch --install    # Установить в папку игры
+# 4. Валидация и патч
+python main.py validate
+python main.py autopatch --install
 ```
 
-### Доступные команды
+### Команды
 
 | Команда | Описание |
 |---------|----------|
-| `extract <lang>` | Извлечь тексты из файлов локализации |
-| `translate` | Начать/возобновить процесс перевода |
-| `status` | Показать прогресс и статистику |
-| `validate` | Проверить спецсимволы в переводах |
+| `extract <lang>` | Извлечь тексты из файлов игры |
+| `translate` | Начать/возобновить перевод |
+| `status` | Показать прогресс |
+| `validate` | Проверить спецсимволы |
 | `autopatch` | Создать и установить патч |
-| `reset` | Сбросить весь прогресс перевода |
-| `info` | Показать информацию о файлах локализации |
-
-### Опции команд
-
-```bash
-# Перевод с опциями
-python main.py translate --verbose        # Показывать детали батчей
-python main.py translate --batch-size 20  # Свой размер батча
-
-# Патч с опциями
-python main.py autopatch --install        # Установить в игру
-python main.py autopatch --with-diff      # Включить diff-файлы
-```
-
-## 🎮 Поддерживаемые модели
-
-| Провайдер | Модели | Примечания |
-|-----------|--------|------------|
-| **OpenRouter** | DeepSeek, Grok, Claude, GPT-4 и др. | Рекомендуется для разнообразия |
-| **OpenAI** | GPT-4o, GPT-4-turbo | Прямой доступ к API |
-| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Opus | Отлично для нюансированного текста |
-| **Google** | Gemini Pro, Gemini Ultra | Хороший баланс |
+| `reset` | Сбросить прогресс |
 
 ## 🎮 Об игре
 
-**Where Winds Meet** (逆水寒, дословно «Против течения») — масштабная китайская MMORPG от NetEase в жанре уся (武俠), действие которой разворачивается в древнем Китае эпохи Северной Сун (960-1127 н.э.). Игра сочетает глубокий сюжет, боевые искусства, исследование открытого мира и богатую систему крафта.
+**Where Winds Meet** — эпическая action-adventure RPG в открытом мире в жанре уся (Wuxia). Действие разворачивается в Китае X века. Вы — молодой мастер меча, раскрывающий забытые истины и тайны собственной личности.
 
-Игроки погружаются в детективный сюжет, расследуя загадочные исчезновения в атмосфере интриг императорского двора, предательств и древних тайн. Мир игры отличается потрясающей графикой, реалистичной физикой и вниманием к историческим деталям.
+Исследуйте яркий мир — от оживлённых городов до затерянных храмов. Освойте перемещение в стиле уся, сражайтесь классическим оружием (мечи, копья, веера, зонты) и отправляйтесь в приключения в одиночку или с друзьями (до 4 человек).
 
 ---
 
 <div align="center">
 
-## 📄 Лицензия / License
+## 📄 License
 
 MIT License © 2025 [0niel](https://github.com/0niel)
 
----
-
 Made with ❤️ for the Where Winds Meet community
 
-**[⬆ Back to top](#-wwm-translator)**
-
 </div>
-
