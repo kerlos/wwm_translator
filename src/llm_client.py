@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -28,24 +29,14 @@ logger = logging.getLogger(__name__)
 
 class LLMClientError(Exception):
     """Base LLM client error."""
-
-
 class RateLimitError(LLMClientError):
     """Rate limit exceeded - should retry with backoff."""
-
-
 class QuotaExceededError(LLMClientError):
     """Quota exceeded - should not retry."""
-
-
 class ConfigurationError(LLMClientError):
     """Configuration error - should not retry."""
-
-
 class TransientError(LLMClientError):
     """Transient error - should retry."""
-
-
 class ErrorType(Enum):
     """Error classification for retry decisions."""
 
@@ -170,22 +161,21 @@ class LLMClient:
         """Initialize OpenRouter."""
         from langchain_openai import ChatOpenAI
 
-        api_key = self._env.openrouter_api_key
-        if not api_key:
+        if api_key := self._env.openrouter_api_key:
+            self._model = ChatOpenAI(
+                model=self._config.model,
+                temperature=self._config.temperature,
+                max_tokens=self._config.max_tokens,
+                timeout=self._config.timeout,
+                api_key=api_key,
+                base_url=self.OPENROUTER_BASE_URL,
+                default_headers={
+                    "HTTP-Referer": "https://github.com/wwm-translator",
+                    "X-Title": "WWM Translator",
+                },
+            )
+        else:
             raise ConfigurationError("OPENROUTER_API_KEY not set in .env")
-
-        self._model = ChatOpenAI(
-            model=self._config.model,
-            temperature=self._config.temperature,
-            max_tokens=self._config.max_tokens,
-            timeout=self._config.timeout,
-            api_key=api_key,
-            base_url=self.OPENROUTER_BASE_URL,
-            default_headers={
-                "HTTP-Referer": "https://github.com/wwm-translator",
-                "X-Title": "WWM Translator",
-            },
-        )
 
     def _init_openai(self) -> None:
         """Initialize OpenAI."""
@@ -212,32 +202,30 @@ class LLMClient:
         """Initialize Anthropic."""
         from langchain_anthropic import ChatAnthropic
 
-        api_key = self._env.anthropic_api_key
-        if not api_key:
+        if api_key := self._env.anthropic_api_key:
+            self._model = ChatAnthropic(
+                model=self._config.model,
+                temperature=self._config.temperature,
+                max_tokens=self._config.max_tokens,
+                timeout=self._config.timeout,
+                api_key=api_key,
+            )
+        else:
             raise ConfigurationError("ANTHROPIC_API_KEY not set")
-
-        self._model = ChatAnthropic(
-            model=self._config.model,
-            temperature=self._config.temperature,
-            max_tokens=self._config.max_tokens,
-            timeout=self._config.timeout,
-            api_key=api_key,
-        )
 
     def _init_google(self) -> None:
         """Initialize Google Gemini."""
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        api_key = self._env.google_api_key
-        if not api_key:
+        if api_key := self._env.google_api_key:
+            self._model = ChatGoogleGenerativeAI(
+                model=self._config.model,
+                temperature=self._config.temperature,
+                max_output_tokens=self._config.max_tokens,
+                google_api_key=api_key,
+            )
+        else:
             raise ConfigurationError("GOOGLE_API_KEY not set")
-
-        self._model = ChatGoogleGenerativeAI(
-            model=self._config.model,
-            temperature=self._config.temperature,
-            max_output_tokens=self._config.max_tokens,
-            google_api_key=api_key,
-        )
 
     @property
     def model(self) -> BaseChatModel:
@@ -368,53 +356,57 @@ class LLMClient:
                     lines.append(f"RU: {ru}")
                 lines.append("")
 
-        lines.append("=== TRANSLATE THESE (EN -> RU) ===")
-        lines.append("")
-
+        lines.extend(("=== TRANSLATE THESE (EN -> RU) ===", ""))
         for i, item in enumerate(texts, 1):
-            lines.append(f"[{i}]")
-            lines.append(f"EN: {item.get('english', '')}")
+            lines.extend((f"[{i}]", f"EN: {item.get('english', '')}"))
             if zh := item.get("original"):
                 lines.append(f"ZH: {zh}")
             lines.append("")
 
         if context_after:
             lines.append("=== PREVIEW (next texts, DO NOT translate) ===")
-            for item in context_after[:2]:
-                lines.append(f"EN: {item.get('english', '')}")
+            lines.extend(f"EN: {item.get('english', '')}" for item in context_after[:2])
             lines.append("")
 
-        lines.append("=== RESPONSE FORMAT ===")
-        lines.append(f"Return JSON array with exactly {len(texts)} Russian translations:")
-        lines.append('["translation 1", "translation 2", ...]')
-
+        lines.extend(
+            (
+                "=== RESPONSE FORMAT ===",
+                f"Return JSON array with exactly {len(texts)} Russian translations:",
+                '["translation 1", "translation 2", ...]',
+            )
+        )
         return "\n".join(lines)
 
-    def _parse_response(self, response: str, expected: int) -> list[str]:
-        """Parse LLM response to extract translations."""
-        response = response.strip()
-
-        if (start := response.find("[")) != -1 and (end := response.rfind("]")) != -1:
-            if end > start:
-                try:
-                    result = json.loads(response[start : end + 1])
-                    if isinstance(result, list):
-                        return self._normalize_list(result, expected)
-                except json.JSONDecodeError:
-                    pass
-
-        # Fallback: line parsing
-        lines = [
-            line.lstrip("0123456789.-) ").strip("\"'")
-            for line in response.split("\n")
-            if line.strip() and not line.strip().startswith(("[", "{", "==="))
-        ]
-
-        if len(lines) >= expected:
-            return lines[:expected]
-
-        logger.warning(f"Parse fallback: {response[:200]}...")
-        return ["[PARSE ERROR]"] * expected
+    def _parse_response(self, content: str, expected_count: int) -> list[str]:
+        """Parse LLM response and extract translations."""
+        content = content.strip()
+        
+        # Try to find JSON array in response
+        start = content.find("[")
+        end = content.rfind("]") + 1
+        
+        if start != -1 and end > start:
+            try:
+                result = json.loads(content[start:end])
+                if isinstance(result, list):
+                    return self._normalize_list(result, expected_count)
+            except json.JSONDecodeError:
+                pass
+        
+        # Fallback: try to parse entire content as JSON
+        try:
+            result = json.loads(content)
+            if isinstance(result, list):
+                return self._normalize_list(result, expected_count)
+        except json.JSONDecodeError:
+            pass
+        
+        # Last resort: split by newlines if looks like list
+        lines = [line.strip().strip('"').strip("'") for line in content.split("\n") if line.strip()]
+        if lines:
+            return self._normalize_list(lines, expected_count)
+        
+        return ["[PARSE_ERROR]"] * expected_count
 
     def _normalize_list(self, items: list, expected: int) -> list[str]:
         """Normalize result list to expected length."""

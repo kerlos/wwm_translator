@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -197,37 +196,3 @@ class ExtractionResult:
         return cls(success=False, message=message, errors=tuple(errors or []))
 
 
-@dataclass(slots=True)
-class BatchContext:
-    """Context for batch translation."""
-
-    before: list[dict[str, str]] = field(default_factory=list)
-    after: list[dict[str, str]] = field(default_factory=list)
-
-    def add_before(self, entry: TranslationEntry) -> None:
-        """Add entry to before context."""
-        if entry.status == TranslationStatus.TRANSLATED:
-            self.before.append(
-                {
-                    "id": entry.id,
-                    "original": entry.original,
-                    "english": entry.english,
-                    "translated": entry.translated,
-                }
-            )
-
-    def add_after(self, entry: TranslationEntry) -> None:
-        """Add entry to after context."""
-        self.after.append(
-            {
-                "id": entry.id,
-                "original": entry.original,
-                "english": entry.english,
-            }
-        )
-
-
-# Type aliases (Python 3.11 compatible)
-EntryList = list[TranslationEntry]
-EntryIterator = Iterator[TranslationEntry]
-TranslationDict = dict[str, str]

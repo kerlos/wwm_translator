@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from functools import lru_cache
@@ -90,11 +91,8 @@ class TokenCounter:
         model_lower = model.lower()
         for prefix, encoding in self.MODEL_ENCODINGS.items():
             if prefix in model_lower:
-                try:
+                with contextlib.suppress(Exception):
                     return tiktoken.get_encoding(encoding)
-                except Exception:
-                    pass
-
         try:
             return tiktoken.get_encoding("cl100k_base")
         except Exception:
@@ -105,11 +103,8 @@ class TokenCounter:
             return 0
 
         if self._encoder is not None:
-            try:
+            with contextlib.suppress(Exception):
                 return len(self._encoder.encode(text))
-            except Exception:
-                pass
-
         # Fallback: ~3 chars per token (conservative)
         return max(1, len(text) // 3)
 
@@ -126,9 +121,7 @@ class TokenCounter:
 
     def record_usage(self, input_text: str, output_text: str) -> tuple[int, int]:
         input_tokens = self.count_tokens(input_text)
-        output_tokens = self.count_tokens(output_text)
-        self._stats.add(input_tokens, output_tokens)
-        return input_tokens, output_tokens
+        return self._record_tokens(output_text, input_tokens)
 
     def record_batch(
         self,
@@ -137,7 +130,11 @@ class TokenCounter:
         response: str,
     ) -> tuple[int, int]:
         input_tokens = self.count_tokens(system_prompt) + self.count_tokens(user_message)
-        output_tokens = self.count_tokens(response)
+        return self._record_tokens(response, input_tokens)
+
+    def _record_tokens(self, output_text: str, input_tokens: int) -> tuple[int, int]:
+        """Record input/output tokens and return counts."""
+        output_tokens = self.count_tokens(output_text)
         self._stats.add(input_tokens, output_tokens)
         return input_tokens, output_tokens
 

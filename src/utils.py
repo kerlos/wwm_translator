@@ -50,17 +50,21 @@ def setup_logging(
         logger.addHandler(handler)
 
     if log_file:
-        path = Path(log_file)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        file_handler = logging.FileHandler(path, encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(
-            logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
-        )
-        logger.addHandler(file_handler)
-
+        _setup_file_handler(log_file, logger)
     return logger
+
+
+def _setup_file_handler(log_file: str, logger: logging.Logger) -> None:
+    """Setup file handler for logging."""
+    path = Path(log_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_handler = logging.FileHandler(path, encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    )
+    logger.addHandler(file_handler)
 
 
 def create_progress() -> Progress:

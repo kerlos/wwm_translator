@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import csv
-import logging
 import struct
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterator
 
-from .models import ExtractionResult, TextEntry
-
-logger = logging.getLogger(__name__)
+from .models import TextEntry
 
 
 @dataclass(slots=True)
@@ -176,95 +171,4 @@ class HashMapDatFile:
                 text_id=entry.id_hex,
                 original_text=text,
             )
-
-
-class HashMapTextExtractor:
-    """Text extractor using HashMap format."""
-    
-    def __init__(self, log_callback=None):
-        self._log = log_callback or logger.info
-    
-    def extract(self, input_dir: Path, output_file: Path) -> ExtractionResult:
-        try:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            dat_files = sorted(input_dir.glob("*.dat"))
-            if not dat_files:
-                return ExtractionResult.fail("No .dat files found")
-            
-            total_texts = 0
-            
-            with open(output_file, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f, delimiter=";")
-                writer.writerow(TextEntry.csv_header())
-                
-                for dat_file in dat_files:
-                    parser = HashMapDatFile()
-                    data = dat_file.read_bytes()
-                    
-                    if not parser.read(data):
-                        self._log(f"Skipped (invalid): {dat_file.name}")
-                        continue
-                    
-                    entries = list(parser.get_text_entries(dat_file.name, total_texts))
-                    
-                    for entry in entries:
-                        if entry.original_text:
-                            writer.writerow(entry.to_csv_row())
-                            total_texts += 1
-                    
-                    if entries:
-                        self._log(f"Processed: {dat_file.name} ({len(entries)} entries)")
-            
-            return ExtractionResult.ok(f"Extracted {total_texts} texts", texts=total_texts)
-            
-        except Exception as e:
-            logger.exception("Text extraction failed")
-            return ExtractionResult.fail(str(e))
-    
-    def pack(self, csv_file: Path, source_dat_dir: Path, output_dir: Path) -> ExtractionResult:
-        """Pack translations: reads original .dat files, applies translations, preserves structure."""
-        try:
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            translations: dict[str, dict[str, str]] = {}
-            
-            with open(csv_file, encoding="utf-8") as f:
-                reader = csv.reader(f, delimiter=";")
-                next(reader)
-                
-                for row in reader:
-                    if len(row) < 8:
-                        continue
-                    file_name = row[1]
-                    text_id = row[6]
-                    text = row[7].replace('\\n', '\n').replace('\\r', '\r')
-                    
-                    if file_name not in translations:
-                        translations[file_name] = {}
-                    translations[file_name][text_id] = text
-            
-            files_count = 0
-            
-            for dat_file in sorted(source_dat_dir.glob("*.dat")):
-                parser = HashMapDatFile()
-                data = dat_file.read_bytes()
-                
-                if not parser.read(data):
-                    (output_dir / dat_file.name).write_bytes(data)
-                    files_count += 1
-                    continue
-                
-                file_translations = translations.get(dat_file.name, {})
-                new_data = parser.write(file_translations) if file_translations else data
-                
-                (output_dir / dat_file.name).write_bytes(new_data)
-                files_count += 1
-                self._log(f"Packed: {dat_file.name}")
-            
-            return ExtractionResult.ok(f"Packed {files_count} files", files=files_count)
-            
-        except Exception as e:
-            logger.exception("Packing failed")
-            return ExtractionResult.fail(str(e))
 

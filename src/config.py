@@ -56,7 +56,7 @@ class LanguagesConfig(BaseModel):
     @cached_property
     def display_names(self) -> dict[str, str]:
         """Human-readable language names."""
-        names = {
+        return {
             "zh_cn": "Chinese (Simplified)",
             "zh_tw": "Chinese (Traditional)",
             "en": "English",
@@ -67,7 +67,6 @@ class LanguagesConfig(BaseModel):
             "fr": "French",
             "es": "Spanish",
         }
-        return names
 
 
 class LLMConfig(BaseModel):

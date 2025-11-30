@@ -3,10 +3,10 @@ from __future__ import annotations
 import csv
 import logging
 import struct
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, Self
+from typing import Self
 
 import pyzstd
 
@@ -16,12 +16,6 @@ from .models import ExtractionResult, TextEntry
 logger = logging.getLogger(__name__)
 
 LogCallback = Callable[[str], None]
-BytesReader = Generator[bytes, None, None]
-
-
-class Extractor(Protocol):
-    def extract(self, input_path: Path, output_path: Path) -> ExtractionResult: ...
-
 
 ARCHIVE_MAGIC = b"\xef\xbe\xad\xde"  # 0xDEADBEEF
 TEXT_MAGIC = b"\xdc\x96\x58\x59"
@@ -152,30 +146,33 @@ class BinaryExtractor:
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
             with open(output_file, "wb") as outfile:
-                outfile.write(ARCHIVE_MAGIC)
-                outfile.write(b"\x01\x00\x00\x00")
-                outfile.write(struct.pack("<I", len(dat_files)))
-
-                archive_data = b""
-
-                for dat_file in dat_files:
-                    file_data = dat_file.read_bytes()
-                    comp_data = pyzstd.compress(file_data)
-
-                    header = struct.pack("<BII", 4, len(comp_data), len(file_data))
-                    outfile.write(struct.pack("<I", len(archive_data)))
-                    archive_data += header + comp_data
-
-                    self._log(f"Packed: {dat_file.name}")
-
-                outfile.write(struct.pack("<I", len(archive_data)))
-                outfile.write(archive_data)
-
+                self._write_archive(outfile, dat_files)
             return ExtractionResult.ok(f"Packed {len(dat_files)} files", files=len(dat_files))
 
         except Exception as e:
             logger.exception("Packing failed")
             return ExtractionResult.fail(str(e))
+
+    def _write_archive(self, outfile, dat_files: list[Path]) -> None:
+        """Write archive header, offsets and compressed blocks."""
+        outfile.write(ARCHIVE_MAGIC)
+        outfile.write(b"\x01\x00\x00\x00")
+        outfile.write(struct.pack("<I", len(dat_files)))
+
+        archive_data = b""
+
+        for dat_file in dat_files:
+            file_data = dat_file.read_bytes()
+            comp_data = pyzstd.compress(file_data)
+
+            header = struct.pack("<BII", 4, len(comp_data), len(file_data))
+            outfile.write(struct.pack("<I", len(archive_data)))
+            archive_data += header + comp_data
+
+            self._log(f"Packed: {dat_file.name}")
+
+        outfile.write(struct.pack("<I", len(archive_data)))
+        outfile.write(archive_data)
 
 
 class TextExtractor:
