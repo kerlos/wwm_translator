@@ -1001,6 +1001,7 @@ def export_web(ctx: click.Context, limit: int | None) -> None:
         "total": 0,
         "translated": 0,
         "skipped": 0,
+        "pending": 0,
         "issues": 0,
     }
 
@@ -1014,18 +1015,19 @@ def export_web(ctx: click.Context, limit: int | None) -> None:
                 stats["translated"] += 1
             elif status == "skipped":
                 stats["skipped"] += 1
-            else:
+            elif status == "needs_retranslation":
                 stats["issues"] += 1
+            else:
+                stats["pending"] += 1
 
-            # Only export translated entries for web (to reduce file size)
-            if status == "translated" and row.get("Russian"):
+            # Export all entries (translated, issues, pending)
+            if status != "skipped":
                 entry = {
                     "id": row["ID"],
                     "en": source_texts.get(row["ID"], row.get("English", "")),
-                    "ru": row["Russian"],
-                    "status": status,
+                    "ru": row.get("Russian", ""),
+                    "status": status if status else "pending",
                 }
-                # Add Chinese if available
                 if zh := original_texts.get(row["ID"]):
                     entry["zh"] = zh
                 

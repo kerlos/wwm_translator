@@ -85,12 +85,12 @@
                     <p class="text-muted text-sm">Переведено</p>
                 </div>
                 <div class="bg-surface rounded-xl p-6">
-                    <p class="text-2xl font-bold text-yellow-400 mb-1" id="stat-issues">10,746</p>
-                    <p class="text-muted text-sm">Требует правок</p>
+                    <p class="text-2xl font-bold text-orange-400 mb-1" id="stat-pending">0</p>
+                    <p class="text-muted text-sm">Не переведено</p>
                 </div>
                 <div class="bg-surface rounded-xl p-6">
-                    <p class="text-2xl font-bold text-muted mb-1" id="stat-skipped">8,957</p>
-                    <p class="text-muted text-sm">Пропущено</p>
+                    <p class="text-2xl font-bold text-yellow-400 mb-1" id="stat-issues">10,746</p>
+                    <p class="text-muted text-sm">Требует правок</p>
                 </div>
                 <div class="bg-surface rounded-xl p-6">
                     <p class="text-2xl font-bold mb-1" id="total-count">365,229</p>
@@ -118,7 +118,8 @@
                     <select id="status-filter" class="bg-surface text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none">
                         <option value="all">Все</option>
                         <option value="translated">Переведено</option>
-                        <option value="issues">С ошибками</option>
+                        <option value="pending">Не переведено</option>
+                        <option value="needs_retranslation">Требует правок</option>
                     </select>
                 </div>
             </div>
@@ -246,8 +247,8 @@
                     document.getElementById('total-progress').textContent = s.progress + '%';
                     document.getElementById('translated-count').textContent = s.translated.toLocaleString();
                     document.getElementById('total-count').textContent = s.total.toLocaleString();
+                    document.getElementById('stat-pending').textContent = (s.pending || 0).toLocaleString();
                     document.getElementById('stat-issues').textContent = (s.issues || 0).toLocaleString();
-                    document.getElementById('stat-skipped').textContent = s.skipped.toLocaleString();
                 }
             } catch(e) {}
 
@@ -273,9 +274,7 @@
                     (t.en && t.en.toLowerCase().includes(q)) ||
                     (t.ru && t.ru.toLowerCase().includes(q));
                 
-                const matchStatus = status === 'all' || 
-                    (status === 'translated' && t.status === 'translated') ||
-                    (status === 'issues' && t.status !== 'translated');
+                const matchStatus = status === 'all' || t.status === status;
                 
                 return matchSearch && matchStatus;
             });
@@ -304,8 +303,11 @@
                     <td class="px-4 py-3 text-muted max-w-xs truncate">${hl(truncate(t.en, 80), q)}</td>
                     <td class="px-4 py-3 max-w-xs truncate">${hl(truncate(t.ru, 80), q)}</td>
                     <td class="px-4 py-3">
-                        <span class="inline-flex items-center gap-1 text-xs ${t.status === 'translated' ? 'text-green-400' : 'text-yellow-400'}">
-                            ${t.status === 'translated' ? '✓' : '!'}
+                        <span class="inline-flex items-center gap-1 text-xs ${
+                            t.status === 'translated' ? 'text-green-400' : 
+                            t.status === 'pending' ? 'text-muted' : 'text-yellow-400'
+                        }">
+                            ${t.status === 'translated' ? '✓' : t.status === 'pending' ? '○' : '!'}
                         </span>
                     </td>
                 </tr>

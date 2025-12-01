@@ -2,6 +2,7 @@
   "total": 365229,
   "translated": 363553,
   "skipped": 689,
-  "issues": 987,
+  "pending": 987,
+  "issues": 0,
   "progress": 99.5
 }
