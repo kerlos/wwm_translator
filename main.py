@@ -351,7 +351,7 @@ def autopatch(ctx: click.Context, install: bool, with_diff: bool) -> None:
 
     patch_lang = config.languages.patch_lang  # e.g. "de"
     source_lang = config.languages.source  # e.g. "en"
-    target_lang = config.languages.target  # e.g. "ru"
+    target_lang = config.languages.target  # e.g. "th"
     game_locale_dir = config.paths.game_locale_dir
 
     console.print("[bold]Autopatch Configuration:[/bold]")
@@ -373,15 +373,15 @@ def autopatch(ctx: click.Context, install: bool, with_diff: bool) -> None:
         console.print("Run 'translate' command first")
         return
 
-    # Load translations (ID -> Russian text)
+    # Load translations (ID -> Thai text)
     console.print("[bold]Loading translations...[/bold]")
     translations: dict[str, str] = {}
     with open(translated_csv, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
-            if row.get("Status") == "translated" and row.get("Russian"):
+            if row.get("Status") == "translated" and row.get("Thai"):
                 # Unescape newlines
-                text = row["Russian"].replace("\\n", "\n").replace("\\r", "\r")
+                text = row["Thai"].replace("\\n", "\n").replace("\\r", "\r")
                 translations[row["ID"]] = text
 
     console.print(f"  Loaded {len(translations):,} translations")
@@ -613,13 +613,13 @@ def validate(ctx: click.Context, fix: bool, check_broken: bool) -> None:
     with open(translated_csv, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
-            if row.get("Status") != "translated" or not row.get("Russian"):
+            if row.get("Status") != "translated" or not row.get("Thai"):
                 continue
 
             total_count += 1
             text_id = row["ID"]
             original = source_texts.get(text_id, row.get("English", ""))
-            translated = row["Russian"]
+            translated = row["Thai"]
             has_issue = False
 
             # Check for error markers (incomplete LLM responses)
@@ -939,14 +939,14 @@ def test_llm(ctx: click.Context) -> None:
 
         system_prompt = (
             "You are translating a martial arts game. "
-            'Translate to Russian. Return JSON: ["translation"]'
+            'Translate to Thai. Return JSON: ["translation"]'
         )
 
         result = client.translate_batch_sync(test_texts, system_prompt)
 
         print_success("LLM connected!")
         console.print(f"  Input EN: {test_texts[0]['english']}")
-        console.print(f"  Output RU: {result[0]}")
+        console.print(f"  Output TH: {result[0]}")
 
     except Exception as e:
         # Handle unicode errors in error message
@@ -1025,7 +1025,7 @@ def export_web(ctx: click.Context, limit: int | None) -> None:
                 entry = {
                     "id": row["ID"],
                     "en": source_texts.get(row["ID"], row.get("English", "")),
-                    "ru": row.get("Russian", ""),
+                    "th": row.get("Thai", ""),
                     "status": status if status else "pending",
                 }
                 if zh := original_texts.get(row["ID"]):
