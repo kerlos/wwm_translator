@@ -68,8 +68,8 @@ languages:
 
 ```bash
 # 1. Extract texts
-python main.py extract en
-python main.py extract zh_cn
+python main.py extract -l en
+python main.py extract -l zh_cn
 
 # 2. Translate
 python main.py translate
