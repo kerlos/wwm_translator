@@ -45,7 +45,7 @@ class BrokenStringDetector:
     # Thresholds
     min_length_ratio: float = 0.3  # Translation should be at least 30% of original length
     max_length_ratio: float = 3.0  # Translation shouldn't be 3x longer than original
-    max_latin_ratio: float = 0.4   # Max 40% Latin chars (outside tags) for Russian text
+    max_latin_ratio: float = 0.4   # Max 40% Latin chars (outside tags) for Thai text
     
     # Character sets
     CYRILLIC = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ')
@@ -201,7 +201,7 @@ class BrokenStringDetector:
         
         latin_ratio = latin_count / total_letters
         
-        # If more Latin than Cyrillic in a Russian translation, it's suspicious
+        # If more Latin than Cyrillic in a Thai translation, it's suspicious
         if latin_ratio > self.max_latin_ratio and cyrillic_count < latin_count:
             return BrokenStringIssue(
                 "untranslated",
@@ -313,7 +313,7 @@ class IssueFixer:
     
     SYSTEM_PROMPT = """You are a translation quality fixer for a Chinese martial arts game "Where Winds Meet".
 
-Your task: Fix ONLY the specific symbol/formatting issues in Russian translations, keeping the meaning intact.
+Your task: Fix ONLY the specific symbol/formatting issues in Thai translations, keeping the meaning intact.
 
 ## Issue Types and How to Fix:
 
@@ -452,7 +452,7 @@ IMPORTANT:
             lines.append(f"[{i}] ID: {issue.id}")
             lines.append(f"Issue: {issue.mismatches}")
             lines.append(f"Original (EN): {issue.original}")
-            lines.append(f"Current (RU): {issue.translated}")
+            lines.append(f"Current (TH): {issue.translated}")
             lines.append("")
         
         user_message = "\n".join(lines)
@@ -512,7 +512,7 @@ IMPORTANT:
         updated = 0
         for row in rows:
             if row["ID"] in fixes:
-                row["Russian"] = fixes[row["ID"]]
+                row["Thai"] = fixes[row["ID"]]
                 updated += 1
         
         with open(output_csv, "w", encoding="utf-8", newline="") as f:

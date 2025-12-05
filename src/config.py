@@ -49,7 +49,7 @@ class LanguagesConfig(BaseModel):
 
     original: str = "zh_cn"
     source: str = "en"
-    target: str = "ru"
+    target: str = "th"
     patch_lang: str = "de"  # Language to patch (replace with translations)
     context_languages: list[str] = Field(default_factory=list)
 
@@ -60,7 +60,7 @@ class LanguagesConfig(BaseModel):
             "zh_cn": "Chinese (Simplified)",
             "zh_tw": "Chinese (Traditional)",
             "en": "English",
-            "ru": "Russian",
+            "th": "Thai",
             "ja": "Japanese",
             "ko": "Korean",
             "de": "German",

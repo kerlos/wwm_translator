@@ -3,7 +3,7 @@
 ## General Principles
 
 1. **Accuracy** - Preserve original meaning
-2. **Naturalness** - Sound natural in Russian
+2. **Naturalness** - Sound natural in Thai
 3. **Atmosphere** - Keep Wuxia and ancient China feel
 4. **Consistency** - Use same terms throughout
 
@@ -16,7 +16,7 @@
 
 ### Names
 
-**Transcription**: Use Russian transcription from Chinese
+**Transcription**: Use Thai transcription from Chinese
 - 李 → Ли
 - 王 → Ван
 - 张 → Чжан
@@ -43,12 +43,12 @@
 
 ## Length Control
 
-Russian translations are typically 15-30% longer than English.
+Thai translations are typically 15-30% longer than English.
 However, if translation becomes **significantly longer** (2x or more):
 
 1. Try to use shorter synonyms where appropriate
 2. Remove filler words if meaning is preserved
-3. Use abbreviations common in Russian gaming context
+3. Use abbreviations common in Thai gaming context
 4. BUT: Never sacrifice meaning for brevity
 5. If shortening is impossible without losing meaning - keep as is
 

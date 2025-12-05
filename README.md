@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-Compatible-6366F1?style=for-the-badge)](https://openrouter.ai)
 
-[English](#english) • [Русский](#русский)
+[English](#english) • [ไทย](#ไทย)
 
 <img src="https://img.shields.io/badge/Where_Winds_Meet-Game_Localization-CD7F32?style=for-the-badge" alt="Where Winds Meet"/>
 
@@ -60,7 +60,7 @@ paths:
 
 languages:
   source: "en"      # Translate from English
-  target: "ru"      # To Russian
+  target: "th"      # To Thai
   patch_lang: "de"  # Replace German locale in-game
 ```
 
@@ -101,7 +101,7 @@ Explore a vibrant world filled with life—from bustling cities to hidden temple
 
 ---
 
-# Русский
+# ไทย
 
 ## 📖 О проекте
 
@@ -144,7 +144,7 @@ paths:
 
 languages:
   source: "en"      # Переводим с английского
-  target: "ru"      # На русский
+  target: "th"      # На тайский
   patch_lang: "de"  # Заменяем немецкую локаль
 ```
 

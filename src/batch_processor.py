@@ -560,7 +560,7 @@ class BatchProcessor:
                     )
                     for i, tr in enumerate(translations[:3]):
                         tr_short = tr[:50] + "..." if len(tr) > 50 else tr
-                        self._log(f"      [{i + 1}] RU: {tr_short}")
+                        self._log(f"      [{i + 1}] TH: {tr_short}")
                     if len(translations) > 3:
                         self._log(f"      ... +{len(translations) - 3} more")
 
@@ -721,7 +721,7 @@ class BatchProcessor:
 
         with open(output_csv, "w", encoding="utf-8", newline="") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["ID", "Original", "English", "Russian", "Status"])
+            writer.writerow(["ID", "Original", "English", "Thai", "Status"])
 
             for entry in entries:
                 writer.writerow(

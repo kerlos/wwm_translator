@@ -355,11 +355,11 @@ class LLMClient:
                 lines.append(f"EN: {item.get('english', '')}")
                 if zh := item.get("original"):
                     lines.append(f"ZH: {zh}")
-                if ru := item.get("translated"):
-                    lines.append(f"RU: {ru}")
+                if th := item.get("translated"):
+                    lines.append(f"TH: {th}")
                 lines.append("")
 
-        lines.extend(("=== TRANSLATE THESE (EN -> RU) ===", ""))
+        lines.extend(("=== TRANSLATE THESE (EN -> TH) ===", ""))
         for i, item in enumerate(texts, 1):
             lines.extend((f"[{i}]", f"EN: {item.get('english', '')}"))
             if zh := item.get("original"):
@@ -374,7 +374,7 @@ class LLMClient:
         lines.extend(
             (
                 "=== RESPONSE FORMAT ===",
-                f"Return JSON array with exactly {len(texts)} Russian translations:",
+                f"Return JSON array with exactly {len(texts)} Thai translations:",
                 '["translation 1", "translation 2", ...]',
             )
         )
@@ -452,7 +452,7 @@ class PromptBuilder:
         self,
         source_lang: str = "en",
         original_lang: str = "zh_cn",
-        target_lang: str = "ru",
+        target_lang: str = "th",
     ) -> str:
         """Build system prompt with caching."""
         cache_key = (source_lang, original_lang, target_lang)
@@ -471,7 +471,7 @@ class PromptBuilder:
             "zh_cn": "Chinese",
             "zh_tw": "Traditional Chinese",
             "en": "English",
-            "ru": "Russian",
+            "th": "Thai",
             "ja": "Japanese",
             "ko": "Korean",
         }
