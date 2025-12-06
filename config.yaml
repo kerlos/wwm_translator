@@ -24,7 +24,7 @@ languages:
 # LLM provider settings
 llm:
   provider: "openai"              # openrouter, openai, anthropic, google
-  model: "gpt-5-nano"    # Model via OpenRouter
+  model: "gpt-4o-mini"    # Model via OpenRouter
   temperature: 0.3                     # Lower = more deterministic
   max_tokens: 4096                     # Max tokens per response
   timeout: 120                         # Request timeout (seconds)

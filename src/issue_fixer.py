@@ -4,6 +4,7 @@ Issue Fixer - Fix validation issues using LLM with smart analysis.
 
 from __future__ import annotations
 
+import ast
 import csv
 import json
 import logging
@@ -281,10 +282,16 @@ class ValidationIssue:
     mismatches: str
     original: str
     translated: str
+    type: str = ""  # Type from CSV (json_artifact, symbol_mismatch, etc.)
     
     @property
     def issue_type(self) -> str:
         """Classify the issue type."""
+        # Use CSV type if available, otherwise detect from mismatches
+        if self.type:
+            return self.type
+        
+        # Fallback to detection from mismatches
         if re.search(r"'\[\d+\]': 0 -> \d+", self.mismatches):
             return "numbered_brackets"  # LLM added [1], [2], etc.
         elif "'\\n'" in self.mismatches:
@@ -298,13 +305,61 @@ class ValidationIssue:
     
     def can_autofix(self) -> bool:
         """Check if issue can be auto-fixed without LLM."""
-        return self.issue_type == "numbered_brackets"
+        issue_type = self.issue_type
+        return issue_type in ("numbered_brackets", "json_artifact")
+    
+    def _fix_json_artifact(self) -> str:
+        """Fix JSON artifact by parsing array and extracting first value."""
+        text = self.translated.strip()
+        
+        # Check if it looks like a JSON array
+        if not (text.startswith('[') and text.endswith(']')):
+            return self.translated
+        
+        try:
+            # Try to parse as JSON
+            parsed = json.loads(text)
+            
+            # If it's a list with at least one element, use the first one
+            if isinstance(parsed, list) and len(parsed) > 0:
+                return str(parsed[0])
+            
+            # Empty array or not a list - return original
+            return self.translated
+            
+        except (json.JSONDecodeError, ValueError):
+            # If JSON parsing fails, try to extract content manually
+            # Handle cases like ['text'] or ["text"]
+            text_inner = text[1:-1].strip()  # Remove outer brackets
+            
+            # Try to match quoted strings
+            # Match single or double quoted strings
+            match = re.match(r'^["\'](.+?)["\']', text_inner)
+            if match:
+                return match.group(1)
+            
+            # If no quotes, might be a simple array element
+            # Split by comma and take first if it looks like array elements
+            if ',' in text_inner:
+                parts = [p.strip().strip('"\'').strip() for p in text_inner.split(',')]
+                if parts:
+                    return parts[0]
+            
+            # Fallback: return original
+            return self.translated
     
     def autofix(self) -> str:
-        """Auto-fix simple issues like numbered brackets."""
-        if self.issue_type == "numbered_brackets":
+        """Auto-fix issues programmatically."""
+        issue_type = self.issue_type
+        
+        if issue_type == "numbered_brackets":
             # Remove [1], [2], etc. from start of translation
             return re.sub(r'^\[\d+\]\s*', '', self.translated)
+        
+        elif issue_type == "json_artifact":
+            return self._fix_json_artifact()
+        
+        # Not fixable automatically
         return self.translated
 
 
@@ -383,9 +438,10 @@ IMPORTANT:
             for row in reader:
                 issues.append(ValidationIssue(
                     id=row["ID"],
-                    mismatches=row["Mismatches"],
+                    mismatches=row.get("Mismatches", ""),
                     original=row["Original"],
                     translated=row["Translated"],
+                    type=row.get("Type", ""),
                 ))
         return issues
     
@@ -393,16 +449,24 @@ IMPORTANT:
         self,
         issues: list[ValidationIssue],
         progress_callback: Callable[[int, int], None] | None = None,
+        translated_csv: Path | None = None,
+        output_csv: Path | None = None,
     ) -> dict[str, str]:
         """
         Fix issues and return dict of {id: fixed_translation}.
         
         Returns only entries that were actually fixed.
+        
+        Args:
+            issues: List of validation issues to fix
+            progress_callback: Optional callback for progress updates
+            translated_csv: Optional CSV file to save fixes after each batch
+            output_csv: Optional output CSV path (defaults to translated_csv)
         """
         fixes: dict[str, str] = {}
         
-        # First, auto-fix simple issues
-        autofix_count = 0
+        # First, auto-fix all fixable issues programmatically
+        autofix_counts: dict[str, int] = {}
         remaining = []
         
         for issue in issues:
@@ -410,12 +474,22 @@ IMPORTANT:
                 fixed = issue.autofix()
                 if fixed != issue.translated:
                     fixes[issue.id] = fixed
-                    autofix_count += 1
+                    issue_type = issue.issue_type
+                    autofix_counts[issue_type] = autofix_counts.get(issue_type, 0) + 1
             else:
                 remaining.append(issue)
         
-        if autofix_count > 0:
-            self._log(f"Auto-fixed {autofix_count} simple issues (numbered brackets)")
+        # Log autofix statistics by type
+        if autofix_counts:
+            total_autofixed = sum(autofix_counts.values())
+            self._log(f"Auto-fixed {total_autofixed} issues programmatically:")
+            for issue_type, count in sorted(autofix_counts.items()):
+                self._log(f"  - {issue_type}: {count}")
+        
+        # Save autofixes if CSV provided
+        if fixes and translated_csv:
+            self.apply_fixes(fixes, translated_csv, output_csv)
+            self._log(f"Saved {len(fixes)} autofixes to CSV")
         
         if not remaining:
             return fixes
@@ -433,6 +507,11 @@ IMPORTANT:
             try:
                 batch_fixes = self._process_batch(batch)
                 fixes.update(batch_fixes)
+                
+                # Save after each batch if CSV provided
+                if batch_fixes and translated_csv:
+                    self.apply_fixes(batch_fixes, translated_csv, output_csv)
+                    self._log(f"  Saved {len(batch_fixes)} fixes from batch {batch_num}")
                 
                 if progress_callback:
                     progress_callback(i + len(batch), len(remaining))
@@ -465,25 +544,85 @@ IMPORTANT:
         
         # Parse response
         fixes = {}
+        content = response[0] if isinstance(response, list) else str(response)
+        
+        # Check if response is already a dict (not JSON string)
+        if isinstance(content, dict):
+            # Single dict response
+            if content.get("action") == "fix" and content.get("fixed"):
+                fixes[content["id"]] = content["fixed"]
+                self._log(f"    Fixed: {content['id']} - {content.get('reason', '')}")
+            return fixes
+        
+        # Try to parse as JSON array first
         try:
-            # Find JSON in response
-            content = response[0]
+            # Find JSON array in response
             start = content.find("[")
             end = content.rfind("]") + 1
             
             if start != -1 and end > start:
                 results = json.loads(content[start:end])
                 
-                for result in results:
+                if isinstance(results, list):
+                    for result in results:
+                        if result.get("action") == "fix" and result.get("fixed"):
+                            fixes[result["id"]] = result["fixed"]
+                            self._log(f"    Fixed: {result['id']} - {result.get('reason', '')}")
+                        elif result.get("action") == "keep":
+                            self._log(f"    Kept: {result['id']} - {result.get('reason', '')}")
+                    return fixes
+        except (json.JSONDecodeError, ValueError):
+            pass
+        
+        # Try to parse as Python dict string (e.g., "{'id': '...', 'action': 'fix', ...}")
+        try:
+            # Check if it looks like a Python dict string
+            content_stripped = content.strip()
+            if content_stripped.startswith("{") and content_stripped.endswith("}"):
+                # Use ast.literal_eval to safely parse Python literals
+                result = ast.literal_eval(content_stripped)
+                
+                if isinstance(result, dict):
+                    # Handle single dict response
                     if result.get("action") == "fix" and result.get("fixed"):
                         fixes[result["id"]] = result["fixed"]
                         self._log(f"    Fixed: {result['id']} - {result.get('reason', '')}")
+                        return fixes
                     elif result.get("action") == "keep":
                         self._log(f"    Kept: {result['id']} - {result.get('reason', '')}")
-                        
-        except json.JSONDecodeError as e:
-            self._log(f"    Failed to parse LLM response: {e}")
-            logger.error(f"JSON parse error: {e}\nResponse: {response[0][:500]}")
+                        return fixes
+                elif isinstance(result, list):
+                    # Handle list of dicts
+                    for item in result:
+                        if isinstance(item, dict):
+                            if item.get("action") == "fix" and item.get("fixed"):
+                                fixes[item["id"]] = item["fixed"]
+                                self._log(f"    Fixed: {item['id']} - {item.get('reason', '')}")
+                            elif item.get("action") == "keep":
+                                self._log(f"    Kept: {item['id']} - {item.get('reason', '')}")
+                    if fixes:
+                        return fixes
+        except (ValueError, SyntaxError, AttributeError):
+            pass
+        
+        # If JSON parsing fails, check if it's a simple bracket removal case
+        # (e.g., if reason mentions "bracket" and response looks like direct translation)
+        if "bracket" in content.lower() or "removed" in content.lower():
+            # Try to extract fixed translation directly from response
+            # Look for patterns like "fixed: '...'" or similar
+            for issue in issues:
+                # If response mentions the issue ID and seems to contain the fixed text
+                if issue.id in content:
+                    # Try to find the fixed text after "fixed" keyword
+                    fixed_match = re.search(r"fixed['\"]?\s*[:=]\s*['\"]([^'\"]+)['\"]", content, re.IGNORECASE)
+                    if fixed_match:
+                        fixes[issue.id] = fixed_match.group(1)
+                        self._log(f"    Fixed: {issue.id} - extracted from response")
+                        return fixes
+        
+        # If all parsing fails, log error
+        self._log(f"    Failed to parse LLM response")
+        logger.warning(f"Could not parse LLM response. Content: {content[:500]}")
         
         return fixes
     

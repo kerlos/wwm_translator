@@ -131,6 +131,177 @@ def extract(ctx: click.Context, language: str | None, all_langs: bool) -> None:
 
 
 @cli.command()
+@click.option("--batch-size", "-b", type=int, help="Override batch size")
+@click.option("--verbose", "-V", is_flag=True, help="Show detailed batch info")
+@click.option("--auto-translate", "-a", is_flag=True, help="Automatically start translation after marking for retry")
+@click.pass_context
+def retry(ctx: click.Context, batch_size: int | None, verbose: bool, auto_translate: bool) -> None:
+    """Retry translations with [PARSE ERROR] or [MISSING] markers"""
+    print_banner()
+
+    import json
+    from src.batch_processor import BatchProcessor
+    from src.llm_client import LLMClient, PromptBuilder
+
+    config: AppConfig = ctx.obj["config"]
+    env_config: EnvConfig = ctx.obj["env"]
+
+    source_csv = config.get_source_csv()
+    translations_file = config.paths.progress_dir / f"{source_csv.stem}_translations.json"
+
+    if not translations_file.exists():
+        print_error(f"Translations file not found: {translations_file}")
+        console.print("Run 'translate' command first")
+        return
+
+    console.print("[bold]Scanning for error markers...[/bold]")
+    console.print()
+
+    # Load translations
+    try:
+        with open(translations_file, encoding="utf-8") as f:
+            translations = json.load(f)
+    except Exception as e:
+        print_error(f"Failed to load translations: {e}")
+        return
+
+    # Find entries with error markers
+    error_entries = []
+    for entry_id, translation in translations.items():
+        if isinstance(translation, str) and ErrorMarkers.contains_error(translation):
+            error_entries.append(entry_id)
+
+    if not error_entries:
+        print_success("No entries with error markers found!")
+        return
+
+    console.print(f"[yellow]Found {len(error_entries):,} entries with error markers[/yellow]")
+    console.print()
+
+    # Show sample
+    console.print("[bold]Sample entries to retry:[/bold]")
+    for entry_id in error_entries[:5]:
+        translation = translations.get(entry_id, "")
+        console.print(f"  [yellow]{entry_id}[/yellow]: {translation[:80]}...")
+    if len(error_entries) > 5:
+        console.print(f"  ... and {len(error_entries) - 5} more")
+    console.print()
+
+    # Remove error entries from translations file
+    console.print("[bold]Removing error entries from progress tracker...[/bold]")
+    for entry_id in error_entries:
+        if entry_id in translations:
+            del translations[entry_id]
+
+    # Save updated translations
+    try:
+        temp_file = translations_file.with_suffix(".tmp")
+        temp_file.write_text(
+            json.dumps(translations, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+        temp_file.replace(translations_file)
+        print_success(f"Removed {len(error_entries):,} error entries from progress tracker")
+    except Exception as e:
+        print_error(f"Failed to save translations: {e}")
+        return
+
+    console.print()
+
+    # Update progress file to reflect removed entries
+    progress_file = config.paths.progress_dir / f"{source_csv.stem}_progress.json"
+    if progress_file.exists():
+        try:
+            with open(progress_file, encoding="utf-8") as f:
+                progress_data = json.load(f)
+            
+            # Decrease translated count by number of removed entries
+            if "translated_entries" in progress_data:
+                progress_data["translated_entries"] = max(0, progress_data["translated_entries"] - len(error_entries))
+            
+            temp_progress = progress_file.with_suffix(".tmp")
+            temp_progress.write_text(
+                json.dumps(progress_data, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+            temp_progress.replace(progress_file)
+            console.print("Updated progress file")
+        except Exception as e:
+            print_warning(f"Could not update progress file: {e}")
+
+    console.print()
+
+    if auto_translate:
+        console.print("[bold cyan]Starting translation for retry entries...[/bold cyan]")
+        console.print()
+
+        if batch_size:
+            config.batch.size = batch_size
+
+        # Check API key
+        api_key = env_config.get_api_key(config.llm.provider)
+        if not api_key:
+            print_error(f"API key not set for {config.llm.provider}")
+            console.print("Set it in .env file")
+            return
+
+        try:
+            llm_client = LLMClient(config.llm, env_config)
+            prompt_builder = PromptBuilder(config.paths.rules_dir).load()
+
+            def log_output(msg: str):
+                try:
+                    print(msg, flush=True)
+                except UnicodeEncodeError:
+                    safe_msg = msg.encode("ascii", errors="replace").decode("ascii")
+                    print(safe_msg, flush=True)
+
+            processor = BatchProcessor(
+                config=config,
+                env_config=env_config,
+                llm_client=llm_client,
+                prompt_builder=prompt_builder,
+                progress_callback=lambda p: None,
+                log_callback=log_output,
+                verbose=verbose,
+            )
+
+            original_csv = config.get_original_csv()
+            output_csv = config.get_output_csv()
+
+            progress = processor.process_sync(
+                source_csv=source_csv,
+                original_csv=original_csv,
+                output_csv=output_csv,
+                resume=True,  # Resume to pick up the removed entries
+            )
+
+            # Results
+            console.print()
+            result_table = Table(title="Retry Results")
+            result_table.add_column("Metric", style="cyan")
+            result_table.add_column("Value", style="green")
+
+            result_table.add_row("Total", str(progress.total_entries))
+            result_table.add_row("Translated", str(progress.translated_entries))
+            result_table.add_row("Skipped", str(progress.skipped_entries))
+            result_table.add_row("Errors", str(progress.error_entries))
+            result_table.add_row("Progress", f"{progress.progress_percent:.1f}%")
+
+            console.print(result_table)
+            console.print()
+            print_success(f"Results saved to: {output_csv}")
+
+        except Exception as e:
+            print_error(str(e))
+            logger.exception("Retry translation failed")
+    else:
+        console.print("[bold]Next steps:[/bold]")
+        console.print("  Run 'python main.py translate' to retry these entries")
+        console.print("  Or use 'python main.py retry --auto-translate' to retry immediately")
+
+
+@cli.command()
 @click.option("--resume/--no-resume", default=True, help="Resume previous translation")
 @click.option("--batch-size", "-b", type=int, help="Override batch size")
 @click.option("--verbose", "-V", is_flag=True, help="Show detailed batch info")
@@ -878,7 +1049,12 @@ def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: 
         console.print("[bold cyan]Fixing issues...[/bold cyan]")
         console.print()
         
-        fixes = fixer.fix_issues(issues)
+        # Pass CSV paths for incremental saving after each batch
+        fixes = fixer.fix_issues(
+            issues,
+            translated_csv=translated_csv if not dry_run else None,
+            output_csv=translated_csv if not dry_run else None,
+        )
         
         console.print()
         console.print(f"[bold]Total fixes: {len(fixes):,}[/bold]")
@@ -894,14 +1070,9 @@ def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: 
             console.print("[bold]Sample fixes:[/bold]")
             for id_, fixed in list(fixes.items())[:5]:
                 console.print(f"  {id_}: {fixed[:80]}...")
-            return
-        
-        # Apply fixes
-        console.print()
-        console.print("[bold]Applying fixes...[/bold]")
-        updated = fixer.apply_fixes(fixes, translated_csv)
-        
-        print_success(f"Updated {updated:,} translations in {translated_csv.name}")
+        else:
+            # Fixes were already applied incrementally during batch processing
+            print_success(f"All fixes saved to {translated_csv.name}")
         console.print()
         console.print("[bold]Next steps:[/bold]")
         console.print("  1. Run 'validate' again to check remaining issues")

@@ -74,10 +74,14 @@ python main.py extract -l zh_cn
 # 2. Translate
 python main.py translate
 
-# 3. Check progress
+# 3. Retry failed translations (with [PARSE ERROR] or [MISSING])
+python main.py retry
+python main.py retry --auto-translate  # Auto-retry immediately
+
+# 4. Check progress
 python main.py status
 
-# 4. Validate & patch
+# 5. Validate & patch
 python main.py validate
 python main.py autopatch --install
 ```
@@ -88,6 +92,7 @@ python main.py autopatch --install
 |---------|-------------|
 | `extract <lang>` | Extract texts from game files |
 | `translate` | Start/resume translation |
+| `retry` | Retry translations with [PARSE ERROR] or [MISSING] markers |
 | `status` | Show progress |
 | `validate` | Check special characters |
 | `autopatch` | Create and install patch |
@@ -158,10 +163,14 @@ python main.py extract zh_cn
 # 2. Перевести
 python main.py translate
 
-# 3. Проверить прогресс
+# 3. Повторить неудачные переводы (с [PARSE ERROR] или [MISSING])
+python main.py retry
+python main.py retry --auto-translate  # Автоматически повторить сразу
+
+# 4. Проверить прогресс
 python main.py status
 
-# 4. Валидация и патч
+# 5. Валидация и патч
 python main.py validate
 python main.py autopatch --install
 ```
@@ -172,6 +181,7 @@ python main.py autopatch --install
 |---------|----------|
 | `extract <lang>` | Извлечь тексты из файлов игры |
 | `translate` | Начать/возобновить перевод |
+| `retry` | Повторить переводы с маркерами [PARSE ERROR] или [MISSING] |
 | `status` | Показать прогресс |
 | `validate` | Проверить спецсимволы |
 | `autopatch` | Создать и установить патч |
