@@ -24,20 +24,20 @@ languages:
 # LLM provider settings
 llm:
   provider: "openai"              # openrouter, openai, anthropic, google
-  model: "gpt-4o-mini"    # Model via OpenRouter
+  model: "gpt-5-nano"    # Model via OpenRouter
   temperature: 0.3                     # Lower = more deterministic
   max_tokens: 4096                     # Max tokens per response
   timeout: 120                         # Request timeout (seconds)
-  max_retries: 3                       # Retry attempts
-  retry_delay: 5                       # Delay between retries (seconds)
+  max_retries: 5                     # Retry attempts
+  retry_delay: 1                       # Delay between retries (seconds)
 
 # Batch processing settings
 batch:
-  size: 10                      # Texts per batch (smaller for free tier)
+  size: 5                     # Texts per batch (smaller for free tier)
   context_before: 4             # Context lines before batch
   context_after: 4              # Context lines after batch  
   max_tokens_per_batch: 4000    # Token limit per batch
-  concurrent_requests: 30        # Parallel requests (2 for free tier with rate limiting)
+  concurrent_requests: 50        # Parallel requests (2 for free tier with rate limiting)
   delay_between_batches: 0.3    # Delay between batch windows (seconds)
 
 # Progress tracking

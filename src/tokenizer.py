@@ -76,6 +76,7 @@ class TokenCounter:
         "gemini": "cl100k_base",
         "grok": "cl100k_base",
         "llama": "cl100k_base",
+        "gpt-5-nano": "cl100k_base",
     }
 
     def __init__(self, model: str = "gpt-4"):
