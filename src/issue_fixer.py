@@ -287,9 +287,16 @@ class ValidationIssue:
     @property
     def issue_type(self) -> str:
         """Classify the issue type."""
-        # Use CSV type if available, otherwise detect from mismatches
+        # Use CSV type if available, otherwise detect from content
         if self.type:
             return self.type
+        
+        # Check for JSON artifacts by examining translated text
+        text_stripped = self.translated.strip()
+        if (text_stripped.startswith('["') or text_stripped.startswith("['") or
+            text_stripped.endswith('"]') or text_stripped.endswith("']") or
+            self.translated.count('", "') >= 2 or self.translated.count("', '") >= 2):
+            return "json_artifact"
         
         # Fallback to detection from mismatches
         if re.search(r"'\[\d+\]': 0 -> \d+", self.mismatches):
@@ -312,41 +319,63 @@ class ValidationIssue:
         """Fix JSON artifact by parsing array and extracting first value."""
         text = self.translated.strip()
         
-        # Check if it looks like a JSON array
-        if not (text.startswith('[') and text.endswith(']')):
-            return self.translated
+        # Strategy 1: Try to parse the entire text as JSON
+        if text.startswith('[') and text.endswith(']'):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    # Get first element and convert to string
+                    result = parsed[0]
+                    if isinstance(result, str):
+                        return result
+                    return str(result)
+            except (json.JSONDecodeError, ValueError):
+                pass
         
-        try:
-            # Try to parse as JSON
-            parsed = json.loads(text)
-            
-            # If it's a list with at least one element, use the first one
-            if isinstance(parsed, list) and len(parsed) > 0:
-                return str(parsed[0])
-            
-            # Empty array or not a list - return original
-            return self.translated
-            
-        except (json.JSONDecodeError, ValueError):
-            # If JSON parsing fails, try to extract content manually
-            # Handle cases like ['text'] or ["text"]
-            text_inner = text[1:-1].strip()  # Remove outer brackets
-            
-            # Try to match quoted strings
-            # Match single or double quoted strings
-            match = re.match(r'^["\'](.+?)["\']', text_inner)
-            if match:
-                return match.group(1)
-            
-            # If no quotes, might be a simple array element
-            # Split by comma and take first if it looks like array elements
-            if ',' in text_inner:
-                parts = [p.strip().strip('"\'').strip() for p in text_inner.split(',')]
-                if parts:
-                    return parts[0]
-            
-            # Fallback: return original
-            return self.translated
+        # Strategy 2: Try to find and parse JSON array patterns in the text
+        # Look for patterns like ["..."] or ["...", "..."]
+        # Find the first complete JSON array in the text
+        bracket_start = text.find('[')
+        if bracket_start != -1:
+            # Try to find matching closing bracket
+            depth = 0
+            for i in range(bracket_start, len(text)):
+                if text[i] == '[':
+                    depth += 1
+                elif text[i] == ']':
+                    depth -= 1
+                    if depth == 0:
+                        # Found a complete array, try to parse it
+                        json_candidate = text[bracket_start:i+1]
+                        try:
+                            parsed = json.loads(json_candidate)
+                            if isinstance(parsed, list) and len(parsed) > 0:
+                                result = parsed[0]
+                                if isinstance(result, str):
+                                    return result
+                                return str(result)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                        break
+        
+        # Strategy 3: Try to convert single quotes to double quotes and parse
+        # Some JSON artifacts use single quotes instead of double quotes
+        if text.startswith("['") or text.startswith("['"):
+            # Replace single quotes with double quotes for JSON parsing
+            text_double_quotes = text.replace("'", '"')
+            if text_double_quotes.startswith('[') and text_double_quotes.endswith(']'):
+                try:
+                    parsed = json.loads(text_double_quotes)
+                    if isinstance(parsed, list) and len(parsed) > 0:
+                        result = parsed[0]
+                        if isinstance(result, str):
+                            return result
+                        return str(result)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        
+        # Fallback: return original (couldn't parse as JSON)
+        return self.translated
     
     def autofix(self) -> str:
         """Auto-fix issues programmatically."""
@@ -357,7 +386,11 @@ class ValidationIssue:
             return re.sub(r'^\[\d+\]\s*', '', self.translated)
         
         elif issue_type == "json_artifact":
-            return self._fix_json_artifact()
+            fixed = self._fix_json_artifact()
+            # Log if fix didn't change the value for debugging
+            if fixed == self.translated:
+                logger.debug(f"JSON artifact fix failed for {self.id}: '{self.translated[:100]}'")
+            return fixed
         
         # Not fixable automatically
         return self.translated
@@ -423,7 +456,7 @@ IMPORTANT:
     def __init__(
         self,
         llm_client: LLMClient,
-        batch_size: int = 5,
+        batch_size: int = 10,
         log_callback: Callable[[str], None] | None = None,
     ):
         self._llm = llm_client
@@ -451,6 +484,7 @@ IMPORTANT:
         progress_callback: Callable[[int, int], None] | None = None,
         translated_csv: Path | None = None,
         output_csv: Path | None = None,
+        issues_file: Path | None = None,
     ) -> dict[str, str]:
         """
         Fix issues and return dict of {id: fixed_translation}.
@@ -465,6 +499,9 @@ IMPORTANT:
         """
         fixes: dict[str, str] = {}
         
+        # Create issues map for lookup
+        issues_map = {issue.id: issue for issue in issues}
+        
         # First, auto-fix all fixable issues programmatically
         autofix_counts: dict[str, int] = {}
         remaining = []
@@ -476,6 +513,9 @@ IMPORTANT:
                     fixes[issue.id] = fixed
                     issue_type = issue.issue_type
                     autofix_counts[issue_type] = autofix_counts.get(issue_type, 0) + 1
+                else:
+                    # Log when autofix was attempted but didn't change the value
+                    self._log(f"  Warning: Autofix for {issue.id} ({issue.issue_type}) returned unchanged value")
             else:
                 remaining.append(issue)
         
@@ -488,8 +528,11 @@ IMPORTANT:
         
         # Save autofixes if CSV provided
         if fixes and translated_csv:
-            self.apply_fixes(fixes, translated_csv, output_csv)
-            self._log(f"Saved {len(fixes)} autofixes to CSV")
+            updated_count = self.apply_fixes(fixes, translated_csv, output_csv, issues_map)
+            self._log(f"Saved {len(fixes)} autofixes to CSV ({updated_count} rows updated/appended)")
+            # Remove fixed entries from validation issues file
+            if issues_file:
+                self.remove_fixed_issues(fixes.keys(), issues_file)
         
         if not remaining:
             return fixes
@@ -497,28 +540,59 @@ IMPORTANT:
         self._log(f"Processing {len(remaining)} issues with LLM...")
         
         # Process remaining with LLM in batches
-        for i in range(0, len(remaining), self._batch_size):
-            batch = remaining[i:i + self._batch_size]
-            batch_num = i // self._batch_size + 1
-            total_batches = (len(remaining) + self._batch_size - 1) // self._batch_size
-            
-            self._log(f"  Batch {batch_num}/{total_batches}...")
-            
-            try:
-                batch_fixes = self._process_batch(batch)
-                fixes.update(batch_fixes)
+        try:
+            for i in range(0, len(remaining), self._batch_size):
+                batch = remaining[i:i + self._batch_size]
+                batch_num = i // self._batch_size + 1
+                total_batches = (len(remaining) + self._batch_size - 1) // self._batch_size
                 
-                # Save after each batch if CSV provided
-                if batch_fixes and translated_csv:
-                    self.apply_fixes(batch_fixes, translated_csv, output_csv)
-                    self._log(f"  Saved {len(batch_fixes)} fixes from batch {batch_num}")
+                self._log(f"  Batch {batch_num}/{total_batches}...")
                 
-                if progress_callback:
-                    progress_callback(i + len(batch), len(remaining))
+                try:
+                    batch_fixes = self._process_batch(batch)
+                    fixes.update(batch_fixes)
                     
-            except Exception as e:
-                self._log(f"  Error in batch {batch_num}: {e}")
-                logger.exception("Batch processing failed")
+                    # Create batch issues map for this batch
+                    batch_issues_map = {issue.id: issue for issue in batch}
+                    
+                    # Save after each batch if CSV provided (incremental save)
+                    if batch_fixes and translated_csv:
+                        updated_count = self.apply_fixes(batch_fixes, translated_csv, output_csv, batch_issues_map)
+                        self._log(f"  Saved {len(batch_fixes)} fixes from batch {batch_num} ({updated_count} rows updated/appended in {translated_csv.name})")
+                        # Remove fixed entries from validation issues file
+                        if issues_file:
+                            self.remove_fixed_issues(batch_fixes.keys(), issues_file)
+                    
+                    if progress_callback:
+                        progress_callback(i + len(batch), len(remaining))
+                        
+                except KeyboardInterrupt:
+                    # User interrupted - save accumulated fixes before re-raising
+                    if fixes and translated_csv:
+                        self._log(f"\n  Interrupted! Saving {len(fixes)} accumulated fixes...")
+                        # Save all accumulated fixes (not just current batch)
+                        self.apply_fixes(fixes, translated_csv, output_csv, issues_map)
+                        self._log(f"  Saved {len(fixes)} fixes before exit")
+                        # Remove fixed entries from validation issues file
+                        if issues_file:
+                            self.remove_fixed_issues(fixes.keys(), issues_file)
+                    raise
+                    
+                except Exception as e:
+                    self._log(f"  Error in batch {batch_num}: {e}")
+                    logger.exception("Batch processing failed")
+                    # Continue with next batch even if one fails
+                    
+        except KeyboardInterrupt:
+            # User interrupted - save accumulated fixes before re-raising
+            if fixes and translated_csv:
+                self._log(f"\n  Interrupted! Saving {len(fixes)} accumulated fixes...")
+                self.apply_fixes(fixes, translated_csv, output_csv, issues_map)
+                self._log(f"  Saved {len(fixes)} fixes before exit")
+                # Remove fixed entries from validation issues file
+                if issues_file:
+                    self.remove_fixed_issues(fixes.keys(), issues_file)
+            raise
         
         return fixes
     
@@ -631,33 +705,137 @@ IMPORTANT:
         fixes: dict[str, str],
         translated_csv: Path,
         output_csv: Path | None = None,
+        issues_map: dict[str, ValidationIssue] | None = None,
     ) -> int:
         """
         Apply fixes to translated CSV.
         
-        Returns number of rows updated.
+        If an ID doesn't exist in the CSV, it will be appended as a new row.
+        
+        Returns number of rows updated/appended.
         """
         if output_csv is None:
             output_csv = translated_csv
         
+        if not fixes:
+            return 0
+        
+        # Create CSV if it doesn't exist
+        fieldnames = ["ID", "Original", "English", "Thai", "Status"]
+        rows = []
+        
+        if translated_csv.exists():
+            try:
+                with open(translated_csv, encoding="utf-8", newline="") as f:
+                    reader = csv.DictReader(f, delimiter=";")
+                    fieldnames = reader.fieldnames or fieldnames
+                    if not fieldnames or "ID" not in fieldnames or "Thai" not in fieldnames:
+                        self._log(f"    Error: CSV missing required columns. Found: {fieldnames}")
+                        return 0
+                    rows = list(reader)
+            except Exception as e:
+                self._log(f"    Error reading CSV: {e}")
+                return 0
+        
+        updated = 0
+        appended = 0
+        
+        # Update existing rows
+        for row in rows:
+            if row["ID"] in fixes:
+                old_value = row.get("Thai", "")
+                row["Thai"] = fixes[row["ID"]]
+                updated += 1
+                # Log first few updates for verification
+                if updated <= 3:
+                    self._log(f"    Updated {row['ID']}: '{old_value[:50]}...' -> '{row['Thai'][:50]}...'")
+        
+        # Append new rows for IDs not found
+        found_ids = {row["ID"] for row in rows}
+        not_found = [fid for fid in fixes.keys() if fid not in found_ids]
+        
+        if not_found:
+            self._log(f"    Appending {len(not_found)} new entries to CSV")
+            for fix_id in not_found:
+                # Get issue data if available
+                issue = issues_map.get(fix_id) if issues_map else None
+                
+                # Create new row
+                new_row = {
+                    "ID": fix_id,
+                    "Original": issue.original if issue else "",
+                    "English": issue.original if issue else "",  # Use original as English
+                    "Thai": fixes[fix_id],
+                    "Status": "translated",
+                }
+                
+                # Ensure all fieldnames are present
+                for field in fieldnames:
+                    if field not in new_row:
+                        new_row[field] = ""
+                
+                rows.append(new_row)
+                appended += 1
+                if appended <= 3:
+                    self._log(f"    Appended {fix_id}: '{fixes[fix_id][:50]}...'")
+        
+        if updated == 0 and appended == 0:
+            self._log(f"    Warning: No rows updated or appended! Trying to fix IDs: {list(fixes.keys())[:5]}")
+            self._log(f"    CSV file: {translated_csv}")
+            self._log(f"    Total rows in CSV: {len(rows)}")
+            if rows:
+                self._log(f"    Sample IDs in CSV: {[r['ID'] for r in rows[:5]]}")
+        
+        try:
+            with open(output_csv, "w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
+                writer.writeheader()
+                writer.writerows(rows)
+            if updated > 0 or appended > 0:
+                action = f"{updated} updated" if updated > 0 else ""
+                action += f", {appended} appended" if appended > 0 else ""
+                self._log(f"    Successfully wrote {action} to {output_csv.name}")
+        except Exception as e:
+            self._log(f"    Error writing CSV: {e}")
+            return 0
+        
+        return updated + appended
+    
+    def remove_fixed_issues(
+        self,
+        fixed_ids: set[str] | list[str],
+        issues_file: Path,
+    ) -> int:
+        """
+        Remove fixed entries from validation issues CSV.
+        
+        Returns number of entries removed.
+        """
+        if not issues_file.exists():
+            return 0
+        
+        fixed_ids_set = set(fixed_ids)
         rows = []
         fieldnames = None
         
-        with open(translated_csv, encoding="utf-8", newline="") as f:
+        # Read all issues
+        with open(issues_file, encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f, delimiter=";")
             fieldnames = reader.fieldnames
             rows = list(reader)
         
-        updated = 0
-        for row in rows:
-            if row["ID"] in fixes:
-                row["Thai"] = fixes[row["ID"]]
-                updated += 1
+        # Filter out fixed entries
+        original_count = len(rows)
+        rows = [row for row in rows if row["ID"] not in fixed_ids_set]
+        removed_count = original_count - len(rows)
         
-        with open(output_csv, "w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
-            writer.writeheader()
-            writer.writerows(rows)
+        # Write back if any were removed
+        if removed_count > 0:
+            with open(issues_file, "w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
+                writer.writeheader()
+                writer.writerows(rows)
+            self._log(f"  Removed {removed_count} fixed entries from validation issues")
         
-        return updated
+        return removed_count
 

@@ -1054,6 +1054,7 @@ def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: 
             issues,
             translated_csv=translated_csv if not dry_run else None,
             output_csv=translated_csv if not dry_run else None,
+            issues_file=issues_file if not dry_run else None,
         )
         
         console.print()
